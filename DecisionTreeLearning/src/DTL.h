@@ -1,3 +1,6 @@
+#ifndef DTL_H
+#define DTL_H
+
 #include <map>
 #include <vector>
 #include <algorithm>
@@ -10,6 +13,7 @@ using namespace std;
 
 template <class Key>
 class Example {
+public:
 	vector<Variable<Key>*> attributes;
 	vector<double> attribute_instantiation;	//We'll use double here since it differs from the domain of the actual attributes (which is bool representing below or above threshold)
 	bool classification;
@@ -41,7 +45,7 @@ bool most_classified(vector<Example<Key> > examples) {
 	}
 
 	pair<bool, int> max = *classification_occurrences.begin();
-	for (map<bool, int>::iterator it = classification_occurrences.begin() + 1; it != classification_occurrences.end(); it++) {
+	for (map<bool, int>::iterator it = next(classification_occurrences.begin(), 1); it != classification_occurrences.end(); it++) {
 		if (max.second < it->second) {
 			max = *it;
 		}
@@ -67,7 +71,7 @@ int index_of_attribute(Example<Key> example, Variable<Key>* attribute) {
 
 	//Breaks when the number of attributes is greater than what int can hold
 	for (int i = 0; i < example.attributes.size(); ++i) {
-		if (example.attributes.at(i)->get_name() == (*attribute)->get_name()) {
+		if (example.attributes.at(i)->get_name() == attribute->get_name()) {
 			index = i;
 		}
 	}
@@ -79,8 +83,8 @@ int index_of_attribute(Example<Key> example, Variable<Key>* attribute) {
 template <typename Key>
 pair<Variable<Key>*, double> choose_best_attribute(vector<Variable<Key>*> attributes, vector<Example<Key> > examples) {
 	//Calculate the number of positive/negative examples in the entire training set
-	unsigned long positive_examples = 0;
-	unsigned long negative_examples = 0;
+	double positive_examples = 0;
+	double negative_examples = 0;
 	
 	for (unsigned long j = 0; j < examples.size(); j++) {
 		if (examples.at(j).classification) {
@@ -93,14 +97,20 @@ pair<Variable<Key>*, double> choose_best_attribute(vector<Variable<Key>*> attrib
 
 	//Calculate the entropy of the entire training set
 	unsigned long all_examples = positive_examples + negative_examples;
-	double entropy = ((-1 * positive_examples / all_examples) * log2(positive_examples / all_examples)) - ((negative_examples / all_examples) * log2(negative_examples / all_examples));
+	double entropy;
+	if (positive_examples != 0 && negative_examples != 0) {
+		entropy = ((-1.0 * positive_examples / all_examples) * log2(positive_examples / all_examples)) - ((negative_examples / all_examples) * log2(negative_examples / all_examples));
+	}
+	else {
+		entropy = 0;
+	}
 
 	Variable<Key>* best_attribute = attributes.at(0);
-	double best_attribute_threshold = 0;
-	double best_attribute_information_gain = 0;
+	double best_attribute_threshold = 0.0;
+	double best_attribute_information_gain = 0.0;
 
 	//Pick an attribute
-	for (vector<Variable<Key>*>::iterator attribute = attributes.begin(); attribute != attributes.end(); attributes++) {
+	for (vector<Variable<Key>*>::iterator attribute = attributes.begin(); attribute != attributes.end(); attribute++) {
 		//Pick a threshold
 		//1. Order the examples based on the selected attribute
 		//Find the index of the selected attribute
@@ -178,8 +188,23 @@ pair<Variable<Key>*, double> choose_best_attribute(vector<Variable<Key>*> attrib
 			//Calculate the information gain for this threshold
 			double all_examples_below = positive_examples_below + negative_examples_below;
 			double all_examples_above = positive_examples_above + negative_examples_above;
-			double entropy_below = ((-1 * positive_examples_below / all_examples_below) * log2(positive_examples_below / all_examples_below)) - ((negative_examples_below / all_examples_below) * log2(negative_examples_below / all_examples_below));	//The entropy for values below the threshold
-			double entropy_above = ((-1 * positive_examples_above / all_examples_above) * log2(positive_examples_above / all_examples_above)) - ((negative_examples_above / all_examples_above) * log2(negative_examples_above / all_examples_above));	//The entropy for values above the threshold
+
+			double entropy_below;
+			if (positive_examples_below != 0 && negative_examples_below != 0) {
+				entropy_below = ((-1.0 * positive_examples_below / all_examples_below) * log2(positive_examples_below / all_examples_below)) - ((negative_examples_below / all_examples_below) * log2(negative_examples_below / all_examples_below));	//The entropy for values below the threshold
+			}
+			else {
+				entropy_below = 0;
+			}
+
+			double entropy_above;
+			if (positive_examples_above != 0 && negative_examples_above != 0) {
+				entropy_above = ((-1.0 * positive_examples_above / all_examples_above) * log2(positive_examples_above / all_examples_above)) - ((negative_examples_above / all_examples_above) * log2(negative_examples_above / all_examples_above));	//The entropy for values above the threshold
+			}
+			else {
+				entropy_above = 0;
+			}
+
 			double remainder = ((positive_examples_below + negative_examples_below) / (positive_examples + negative_examples)) * entropy_below +
 				((positive_examples_above + negative_examples_above) / (positive_examples + negative_examples)) * entropy_above; //Sum of proportional entropy
 			double information_gain = entropy - remainder;
@@ -199,7 +224,7 @@ pair<Variable<Key>*, double> choose_best_attribute(vector<Variable<Key>*> attrib
 	}
 
 	//Return the attribute and threshold that provides the highest information gain
-	return pair<Variable<Key>*>, double>(best_attribute, best_attribute_threshold);
+	return pair<Variable<Key>*, double>(best_attribute, best_attribute_threshold);
 }
 
 template <typename Key>
@@ -212,18 +237,20 @@ vector<Example<Key> > filter_examples(vector<Example<Key> > examples, pair<Varia
 	int index = index_of_attribute(examples.at(0), attribute.first);
 
 	//Assume index isn't -1 or something went horribly wrong because we can't find attribute in the example
-	for (vector<Example<Key> >::iterator example = examples.begin(); example != examples.end(); example++) {
-		if ((value == "above" && example->attribute_instantiation.at(index) >= attribute.second) ||
-			(value == "below" && example->attribute_instantiation.at(index) < attribute.second)) {
-			new_examples.push_back(*example);
-		}
-		else {
-			//or else something went horribly wrong...
-			cout << "Variables didn't just contain above and below, my assumption is faulty :(" << endl;
-			return examples;
+	if (index != -1) {
+		for (vector<Example<Key> >::iterator example = examples.begin(); example != examples.end(); example++) {
+			if ((value == "above" && example->attribute_instantiation.at(index) >= attribute.second) ||
+				(value == "below" && example->attribute_instantiation.at(index) < attribute.second)) {
+				new_examples.push_back(*example);
+			}
 		}
 	}
-
+	else {
+		//or else something went horribly wrong...
+		cout << "Variables didn't just contain above and below, my assumption is faulty :(" << endl;
+		return examples;
+	}
+	
 	return new_examples;
 }
 
@@ -234,7 +261,7 @@ Node<Key, bool>* decision_tree_learning(vector<Example<Key> > examples, vector<V
 		return default;
 	}
 	else if (is_same_classification<Key>(examples)) {
-		return new Node<Key, bool>*>(examples.at(0).classification);
+		return new Node<Key, bool>(examples.at(0).classification);
 	}
 	else if (attributes.empty()) {
 		return new Node<Key, bool>(most_classified<Key>(examples));
@@ -242,12 +269,13 @@ Node<Key, bool>* decision_tree_learning(vector<Example<Key> > examples, vector<V
 	else {
 		pair<Variable<Key>*, double> best_attribute = choose_best_attribute<Key>(attributes, examples);
 		Node<Key, bool>* tree = new Node<Key, bool>(false, best_attribute.first);
+		tree->set_threshold(best_attribute.second);
 
 		for (vector<Key>::iterator it = best_attribute.first->get_domain().begin(); it != best_attribute.first->get_domain().end(); ++it) {
 			vector<Example<Key> > filtered_examples = filter_examples<Key>(examples, best_attribute, *it);
-			Node<Key, bool> default_node = new Node<Key, bool>(most_classified<Key>(examples));
+			Node<Key, bool>* default_node = new Node<Key, bool>(most_classified<Key>(examples));
 			
-			Node<Key, bool> subtree = decision_tree_learning(filtered_examples, attributes, default_node);
+			Node<Key, bool>* subtree = decision_tree_learning(filtered_examples, attributes, default_node);
 
 			tree->add_neighbour(*it, subtree);
 		}
@@ -255,3 +283,5 @@ Node<Key, bool>* decision_tree_learning(vector<Example<Key> > examples, vector<V
 		return tree;
 	}
 }
+
+#endif

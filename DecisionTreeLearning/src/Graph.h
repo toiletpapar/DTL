@@ -1,6 +1,10 @@
+#ifndef GRAPH_H
+#define GRAPH_H
+
 #include <vector>
 #include <map>
 #include <string>
+#include <iostream>
 
 using namespace std;
 
@@ -59,6 +63,8 @@ public:
 
 	double get_threshold();
 	Node<K, T>* set_threshold(double threshold);
+
+	static void print_graph(Node<K, T>* node, long count);
 private:
 	Node<K, T>* parent;
 	Variable<K>* variable;
@@ -126,7 +132,7 @@ bool Node<K, T>::is_leaf()
 }
 
 template <typename K, typename T>
-T* Node<K, T>::get_data() {
+T Node<K, T>::get_data() {
 	return this->data;
 }
 
@@ -174,3 +180,27 @@ Node<K, T>* Node<K, T>::set_threshold(double threshold)
 	this->threshold = threshold;
 	return this;
 }
+
+//Assume acyclic
+template<class K, class T>
+void Node<K, T>::print_graph(Node<K, T>* node, long count)
+{
+	for (long i = 0; i < count; i++) {
+		cout << "  ";
+	}
+
+	if (!node->is_leaf()) {
+		//non-leaf node
+		cout << "Name: " << node->get_variable()->get_name() << " Threshold: " << node->get_threshold() << endl;
+		map<K, Node<K, T>*> neighbours = node->get_neighbours();
+		count++;
+		for (map<K, Node<K, T>*>::iterator it = neighbours.begin(); it != neighbours.end(); it++) {
+			print_graph(it->second, count);
+		}
+	}
+	else {
+		cout << "Classification: " << node->get_data() << endl;
+	}
+}
+
+#endif
